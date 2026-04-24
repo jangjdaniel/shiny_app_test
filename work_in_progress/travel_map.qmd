@@ -189,3 +189,5 @@ Make a shiny app where I have a date slider. I want to see the timeline on when 
 Or maybe something that hovers so I can see where and when I last went
 
 Also a visual that has lines between states to show a rough path towards everything.
+
+Also add a travel wish list (with coordinates) so I can keep them somewhere other than google maps. Maybe there's a way to extract coordinates from google maps...
