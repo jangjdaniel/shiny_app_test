@@ -1,0 +1,191 @@
+---
+title: "My Travel Map"
+author: Daniel Jang
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+date-format: iso
+format: 
+  html: 
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  error: false
+  message: false
+editor: source
+---
+
+```{r}
+library(tidyverse)
+library(tidyselect)
+library(tibble)
+library(sf)
+library(tigris)
+library(lubridate)
+library(tidygeocoder)
+
+library(gt)
+library(gtsummary) # nice count visualizations
+library(forcats) # a specific data wrangling issue
+```
+
+# The United States
+
+After my semester abroad, I made a goal of travelling to every U.S. state. I am documenting my progress here because I can make nice visualizations and data
+
+```{r}
+# The dataset: initialization from an example list of trips I made
+data.frame(
+  type             = c("Leisure", "Leisure"),
+  desc             = c("Friend", "Friend"), # can just be text
+  state            = c("DC", "Texas"),
+  cities           = c("Washington", "Austin"), #comma-separated 
+  start_place      = c("New York City, NY", "Boston, MA"),
+  start_date       = ymd(c("2025-07-12", "2025-08-15")),
+  end_place        = c("New York City, NY", "Boston, MA"),
+  end_date         = ymd(c("2025-07-12", "2025-08-18")),
+  transport_method = c("Train", "Plane"),
+  redeye_indicator = c("Yes", "No"))
+```
+
+```{r}
+add_trip <- function(file = "trips.rds") {
+
+  # Load existing trips
+  trips <- readRDS(file)
+
+  
+  cat("\n--- New Trip Entry ---\n")
+  type <- readline("Type (Leisure/Business): ")
+  desc <- readline("Description: ")
+
+  
+  state <- readline("State (Full name): ")
+  cities <- readline(
+    "Cities visited (comma-separated): "
+  )
+
+
+  start_place <- readline("Start location (City, State): ")
+  start_date <- ymd(
+    readline("Start date (YYYY-MM-DD): ")
+  )
+
+  
+  end_place <- readline("End location (City, State): ")
+  end_date <- ymd(
+    readline("End date (YYYY-MM-DD): ")
+  )
+
+  
+  transport_method <- readline(
+    "Transport method (e.g. Plane, Train, Car): "
+  )
+  redeye_indicator <- readline(
+    "Redeye? (Yes/No): "
+  )
+
+  new_trip <- tibble(
+    type = type,
+    desc = desc,
+    state = state,
+    cities = cities,
+    start_place = start_place,
+    start_date = start_date,
+    end_place = end_place,
+    end_date = end_date,
+    transport_method = transport_method,
+    redeye_indicator = redeye_indicator
+  )
+
+  # Append
+  trips <- bind_rows(
+    trips,
+    new_trip
+  )
+
+  # Save automatically
+  saveRDS(
+    trips,
+    file
+  )
+
+  cat("\nTrip saved to", file, "\n")
+
+  invisible(trips)
+}
+```
+
+Run this code to sort everything
+
+```{r}
+#| eval: false
+
+temp <- readRDS("trips.rds")
+
+# example code to rewrite mistakes
+fix(temp)
+
+
+# rearrange and make sure everything is as it should be
+temp <- temp |>
+  dplyr::arrange(desc(start_date)) |>
+  mutate(start_date = as.Date(start_date),
+         end_date = as.Date(end_date))
+
+#ideas: solo trip indicator, what company did i use to travel
+saveRDS(temp, "trips.rds")
+```
+
+*NEW TRIP ENTRY*
+
+```{r}
+#| echo: true
+#| eval: false
+add_trip()
+```
+
+> Need to fix this so that it's not a whole list printed in the html file
+
+```{r}
+daniel_travel_map <- readRDS("trips.rds")
+
+daniel_travel_map |> 
+  dplyr::select(-desc, -start_date, -end_date) |>
+  knitr::kable(format = "html")
+```
+
+This does not count the states I have actually lived in. Not all trips I have done in my life are included. These are just ones I thought were memorable. I also don't count just passing through a state. 
+
+```{r}
+visit_counts <- daniel_travel_map |>
+  count(state, name = "visits")
+
+# US states shapefile
+us <- states(cb = TRUE) |>
+  shift_geometry() #for alaska and hawaii
+
+# Join counts to map
+map_data <- us |>
+  left_join(
+    visit_counts,
+    by = c("NAME" = "state")
+  ) |>
+  mutate(
+    visits = ifelse(is.na(visits), 0, visits)
+  )
+
+st_bbox(map_data)
+
+# Plot
+ggplot(map_data) +
+  geom_sf(aes(fill = visits)) +
+  coord_sf(xlim = c(-3500000, 3500000), ylim = c(-2500000, 2500000), expand = FALSE) + 
+  scale_fill_viridis_c(name = "Trips") +
+  scale_fill_gradient(low = "white", high = "blue") + 
+  theme_minimal() 
+```
+
+Make a shiny app where I have a date slider. I want to see the timeline on when I visit states
+Or maybe something that hovers so I can see where and when I last went
+
+Also a visual that has lines between states to show a rough path towards everything.
