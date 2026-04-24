@@ -4,12 +4,21 @@ library(DT)
 library(leaflet)
 library(tigris)
 library(sf)
+library(lubridate)
 library(here)
 
 options(tigris_use_cache = TRUE)
 
 # Load your data
 travel_map <- readRDS(here("data", "trips.rds"))
+
+# Just a sanity fix
+travel_map <- travel_map |>
+  dplyr::mutate(start_date = as.Date(start_date),
+                end_date = as.Date(end_date)) |>
+  dplyr::arrange(desc(start_date)) |>
+  dplyr::select(-desc)
+
 
 # ---- UI ----
 ui <- fluidPage(
@@ -27,15 +36,14 @@ ui <- fluidPage(
     tabPanel("Travel Map",
              br(),
              sliderInput(
-               sliderInput(
                  "date_single",
                  "Select Month:",
-                 min = min(travel_map$start_date),
-                 max = max(travel_map$start_date),
-                 value = min(travel_map$start_date),
+                 min = min(travel_map$start_date, na.rm = TRUE),
+                 max = max(travel_map$start_date, na.rm = TRUE),
+                 value = min(travel_map$start_date, na.rm = TRUE),
                  timeFormat = "%Y-%m",
                  animate = TRUE
-               ))
+               )
     )
   )
 )
@@ -54,12 +62,12 @@ server <- function(input, output, session) {
   
   # ---- FILTERED DATA ----
   filtered_data <- reactive({
-    req(input$date_range)
+    req(input$date_single)
     
     travel_map |>
-      filter(
-        start_date >= input$date_range[1],
-        start_date <= input$date_range[2]
+      dplyr::filter(
+        lubridate::floor_date(start_date, "month") ==
+          lubridate::floor_date(input$date_single, "month")
       )
   })
   
@@ -73,8 +81,7 @@ server <- function(input, output, session) {
   output$map <- renderLeaflet({
     
     # Load US states
-    us <- states(cb = TRUE) |>
-      shift_geometry()
+    us <- states(cb = TRUE)
     
     # Join data
     map_data <- us |>
@@ -105,6 +112,10 @@ server <- function(input, output, session) {
       )
   })
 }
+
+
+#I also want to show histograms and counts for which means of transportation I chose, how many redeyes I took, city counts, etc.
+
 
 # ---- RUN APP ----
 shinyApp(ui, server)
